@@ -17,7 +17,7 @@ breakstops=False)`:
 #unigram-bigram #multi-document #maximum-entropy #random-walk
 ```
 
-...many of which, as you may note, despite being multiple lexical units, only
+...many of which you may note, despite being multiple lexical units, only
 semantically encapsulate a singular concept or entity.  I attempted an
 alternative approach to the one run in the main execution path of the script
 derived from TextRank, but the candidate sets I was generating were far too
@@ -30,9 +30,9 @@ candidates.
 respective candidate sets in order to yield results that speak to the content
 of their documents, but in exchange for their small candidate sets and the
 resulting precision, they trade away a bit of what I wanted, which was
-_con_cision: Keywords that were longer than one lexical unit, but not by too
+_con_-cision: Keywords that were longer than one lexical unit, but not by too
 much. Twitter leaps to mind, with camel-case hashtags that are multiple words
-long, but just barely, not sentences, not even more than three words.
+long, but just barely. Not sentences, not even more than three words.
 
 ## The solution
 
