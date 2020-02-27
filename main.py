@@ -175,7 +175,6 @@ class MoodyEmbeddings(object):
         # V.sort(key=lambda k: R[k])
         # return V
 
-
     def summarize(self, tokens, embed=None, n=5):
         if embed is None:
             embed = self.embed
@@ -226,9 +225,11 @@ def tokenize(istrm):
 
 np.seterr(all='raise')
 tokens = tuple(tokenize(sys.stdin.read().lower()))
-# strip away conjunctions and determinants ― anything that isn't useful for consideration as part of a key -word or -phrase
+# strip away conjunctions and determinants ― anything that isn't useful for
+# consideration as part of a key -word or -phrase
+forbidden_tags = {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'}
 tokens = tuple(t for t, tag in nltk.pos_tag(tokens)
-               if tag not in {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'})
+               if tag not in forbidden_tags)
 
 M = MoodyEmbeddings(tokens, n=5, dim=64)
 print(M.stops())
