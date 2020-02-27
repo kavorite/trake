@@ -4,6 +4,7 @@ from collections import deque, Counter
 import regex as re
 import sys
 import unicodedata as ud
+import nltk
 from collections import OrderedDict
 # import matplotlib.pyplot as plt
 from scipy import stats
@@ -135,7 +136,7 @@ class MoodyEmbeddings(object):
         # u = np.mean(M, axis=0).reshape(M.shape[1])
         # v = self.induction_matrix.dot(u)
         # v = [self.tf_idf[t] for t in tokens]
-        v = [0.5*(self.tr[t]) + 0.5*self.tf_idf[t] for t in tokens]
+        v = [0.7*(self.tr[t]) + 0.3*self.tf_idf[t] for t in tokens]
         m = np.mean(v)
         return m
 
@@ -146,20 +147,22 @@ class MoodyEmbeddings(object):
         S = list(t for t, x in R.items() if alpha < x)
         S.sort(key=lambda t: R[t], reverse=True)
         return S
-
-    def keygrams(self, tokens, alpha=0.95, n=3):
-        stops = set(self.stops(alpha=alpha))
+    
+    def breakstops(self, tokens, alpha=0.99, n=3):
+        stops = set(self.stops(alpha=alpha)[:10])
         queue = []
-        C = Counter()
         for t in tokens:
             if t in stops and len(queue) > 0:
-                for ctx in recursive_ngrams(queue, n=n):
-                    ctx = tuple(ctx)
-                    C[ctx] += 1
-                queue = []
+                yield from map(tuple, recursive_ngrams(queue, n=n))
             elif t not in stops:
                 queue.append(t)
-        R = {k: self.stoprank(k) / f / len(k)
+
+
+    def keygrams(self, tokens, alpha=0.95, n=3, breakstops=True):
+        candidates = (self.breakstops(tokens, alpha=alpha, n=n) if breakstops
+                      else recursive_ngrams(tokens, n=n))
+        C = Counter(map(tuple, candidates))
+        R = {k: self.stoprank(k) / np.log(f+1) / (len(k)+1)
              for k, f in C.items()}
         V = list(C.keys())
         V.sort(key=lambda k: R[k])
@@ -216,14 +219,19 @@ def strip_punct(s):
 
 
 def tokenize(istrm):
-    return re.split(r'[\s\p{Mn}\p{P}0-9]+', istrm)
+    return (t for t in re.split(r'[\s\p{Mn}\p{P}]+', istrm)
+            if t != '')
 
 
 np.seterr(all='raise')
 tokens = tuple(tokenize(sys.stdin.read().lower()))
+# strip away conjunctions and determinants ― anything that isn't useful for consideration as part of a key -word or -phrase
+tokens = tuple(t for t, tag in nltk.pos_tag(tokens)
+               if tag not in {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'})
+
 M = MoodyEmbeddings(tokens, n=5, dim=64)
 print(M.stops())
-print(M.keygrams(tokens)[:10])
+print(M.keygrams(tokens, breakstops=False)[:10])
 
 # print(list(M.stoprank().keys()).index('textrank') / len(M.vocab))
 # print(M.vocab['the'])
