@@ -53,7 +53,7 @@ For those wondering, `MoodyEmbeddings` is named for the guy who wrote [this
 blog post][abstain], because I used his SVD pseudo-vector approach to generate
 on-the-fly word embeddings in conjunction with [the á-la-carte
 approach][alacarte]. The "TextRank" analysis I'm doing in
-`MoodyEmbeddings.stoprank` isn't based on running GloVE or word2vec, but rather
+`MoodyEmbeddings.keygrams` isn't based on running GloVE or word2vec, but rather
 derived from his dimensionality-reduction methodology.
 
 [autosumm]: https://wikipedia.org/wiki/Automatic_summarization
