@@ -77,8 +77,10 @@ def tf_idf(tokens, n=32):
     tf = Counter()
     df = Counter()
     d = 0
+    queue = deque(maxlen=n)
     while True:
         ctx = tuple(it.islice(tokens, n))
+        queue += ctx
         if len(ctx) == 0:
             break
         d += 1
@@ -147,7 +149,7 @@ class MoodyEmbeddings(object):
         S = list(t for t, x in R.items() if alpha < x)
         S.sort(key=lambda t: R[t], reverse=True)
         return S
-    
+
     def breakstops(self, tokens, alpha=0.99, n=3):
         stops = set(self.stops(alpha=alpha)[:10])
         queue = []
@@ -156,7 +158,6 @@ class MoodyEmbeddings(object):
                 yield from map(tuple, recursive_ngrams(queue, n=n))
             elif t not in stops:
                 queue.append(t)
-
 
     def keygrams(self, tokens, alpha=0.95, n=3, breakstops=True):
         candidates = (self.breakstops(tokens, alpha=alpha, n=n) if breakstops
@@ -173,7 +174,7 @@ class MoodyEmbeddings(object):
         # R = dict(zip(V, pr(A)))
         # V.sort(key=lambda k: R[k])
         # return V
-        
+
 
     def summarize(self, tokens, embed=None, n=5):
         if embed is None:
