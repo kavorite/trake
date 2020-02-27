@@ -7,7 +7,7 @@ summarization][autosumm]. The reasons for its inception are twofold:
 1. I found approaches that captured summary keywords of a single lexical unit
 to be insufficient for my purposes, because many of what one would consider a
 "keyword" are not parsed by the most naive means of subdividing plain text into
-lexical units as unigrams. For example, from [the aforementioned wiki
+lexical units. For example, from [the aforementioned wiki
 page][autosumm], my methods extracted the following bigrams using a
 tag-filtered set of tokens `T` in the call `MoodyEmbeddings.keygrams(T,
 breakstops=False)`:
@@ -32,7 +32,7 @@ of their documents, but in exchange for their small candidate sets and the
 resulting precision, they trade away a bit of what I wanted, which was
 _con_cision: Keywords that were longer than one lexical unit, but not by too
 much. Twitter leaps to mind, with camel-case hashtags that are multiple words
-long, but just barely.
+long, but just barely, not sentences, not even more than three words.
 
 ## The solution
 
