@@ -5,7 +5,7 @@ import regex as re
 import sys
 import unicodedata as ud
 from collections import OrderedDict
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from scipy import stats
 
 
@@ -15,8 +15,7 @@ def nrm2(v):
 
 def cos(u, v):
     a, b = map(nrm2, (u, v))
-    cosine = np.clip(np.dot(u, v) / a / b, -1, 1)
-    return 1 - np.arccos(cosine) / np.pi
+    return np.clip(1 - np.dot(u, v) / a / b, 0, 1)
 
 
 def pr(A, max_iters=None, k=1e-3, d=0.15):
@@ -73,11 +72,14 @@ def pmi(tokens, n=5):
     return (T, A)
 
 
-def tf_idf(tokens, n=5):
+def tf_idf(tokens, n=32):
     tf = Counter()
     df = Counter()
     d = 0
-    for ctx in ngrams(tokens, n=n):
+    while True:
+        ctx = tuple(it.islice(tokens, n))
+        if len(ctx) == 0:
+            break
         d += 1
         touch = set()
         for t in ctx:
@@ -85,13 +87,16 @@ def tf_idf(tokens, n=5):
             touch.add(t)
         for t in touch:
             df[t] += 1
-    return {t: tf[t] * np.log(d / df[t]) for t in tf.keys()}
+    T = tuple(tf.keys())
+    R = np.array([tf[t] * np.log(d / df[t]) for t in T])
+    R /= nrm2(R)
+    return dict(zip(T, R))
 
 
 class MoodyEmbeddings(object):
     def __init__(self, tokens, n=5, dim=None):
         tokens, ttokens = it.tee(tokens)
-        self.tf_idf = tf_idf(ttokens, n=n)
+        self.tf_idf = tf_idf(ttokens)
         tokens, ttokens = it.tee(tokens)
         T, J = pmi(tokens, n=n)
         U, S, V_h = np.linalg.svd(J, full_matrices=False)
@@ -109,6 +114,7 @@ class MoodyEmbeddings(object):
         self.vocab = {t: V[i] for t, i in T.items()}
         self.induction_matrix = A
         self.dim = V.shape[1]
+        R /= nrm2(R)
         self.tr = {t: R[i] for t, i in T.items()}
 
     def embed(self, token, placeholder=None):
@@ -129,36 +135,42 @@ class MoodyEmbeddings(object):
         # u = np.mean(M, axis=0).reshape(M.shape[1])
         # v = self.induction_matrix.dot(u)
         # v = [self.tf_idf[t] for t in tokens]
-        v = [1-self.tr[t] for t in tokens]
+        v = [0.5*(self.tr[t]) + 0.5*self.tf_idf[t] for t in tokens]
         m = np.mean(v)
         return m
 
-    def stops(self, alpha=0.95):
-        R = {t: self.stoprank(t) for t in self.vocab
-             for t in self.vocab.keys()}
-        # R = {t: self.tf[t] for t in self.vocab.keys()}
+    def stops(self, alpha=0.99):
+        R = {t: self.stoprank(t) for t in self.vocab.keys()}
         parameters = stats.expon.fit([tuple(R.values())])
-        exp = dict(zip(('loc', 'scale'), parameters))
-        alpha = stats.expon.ppf(alpha, **exp)
+        alpha = stats.expon.ppf(alpha, *parameters)
         S = list(t for t, x in R.items() if alpha < x)
-        S.sort(key=lambda t: R[t])
+        S.sort(key=lambda t: R[t], reverse=True)
         return S
 
-    def summary_candidates(self, tokens, alpha=0.99, n=2):
+    def keygrams(self, tokens, alpha=0.95, n=3):
         stops = set(self.stops(alpha=alpha))
         queue = []
         C = Counter()
         for t in tokens:
             if t in stops and len(queue) > 0:
-                for ctx in ngrams(queue, n=n):
+                for ctx in recursive_ngrams(queue, n=n):
                     ctx = tuple(ctx)
                     C[ctx] += 1
                 queue = []
-            else:
+            elif t not in stops:
                 queue.append(t)
+        R = {k: self.stoprank(k) / f / len(k)
+             for k, f in C.items()}
         V = list(C.keys())
-        V.sort(key=lambda ctx: self.stoprank(ctx) / np.log(C[ctx]+1), reverse=True)
+        V.sort(key=lambda k: R[k])
         return V
+        # A = np.array([[cos(self.oneshot(a), self.oneshot(b))
+        #                for a in V]
+        #               for b in V])
+        # R = dict(zip(V, pr(A)))
+        # V.sort(key=lambda k: R[k])
+        # return V
+        
 
     def summarize(self, tokens, embed=None, n=5):
         if embed is None:
@@ -210,7 +222,8 @@ def tokenize(istrm):
 np.seterr(all='raise')
 tokens = tuple(tokenize(sys.stdin.read().lower()))
 M = MoodyEmbeddings(tokens, n=5, dim=64)
-print(M.summary_candidates(tokens)[:10])
+print(M.stops())
+print(M.keygrams(tokens)[:10])
 
 # print(list(M.stoprank().keys()).index('textrank') / len(M.vocab))
 # print(M.vocab['the'])
