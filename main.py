@@ -8,15 +8,29 @@ import nltk
 from collections import OrderedDict
 # import matplotlib.pyplot as plt
 from scipy import stats
+from nltk.stem.porter import PorterStemmer
 
 
 def nrm2(v):
-    return np.sqrt(np.sum(np.square(v)))
+    return float(np.sqrt(np.sum(np.square(v))))
 
 
 def cos(u, v):
-    a, b = map(nrm2, (u, v))
-    return np.clip(1 - np.dot(u, v) / a / b, 0, 1)
+    a = float(np.sqrt(np.sum(np.square(u))))
+    b = float(np.sqrt(np.sum(np.square(v))))
+    return 1 - np.dot(u, v) / a / b
+
+
+def coses(U, V):
+    if U.shape[0] != V.shape[0]:
+        raise ValueError('shape mismatch')
+    m = U.shape[0]
+    n = min(U.shape[1], V.shape[1])
+    A = cp.zeros((m, n))
+    for i in range(m):
+        for j in range(n):
+            A[i, j] = cos(U[i], V[j])
+    return A
 
 
 def pr(A, max_iters=None, k=1e-3, d=0.15):
@@ -26,7 +40,7 @@ def pr(A, max_iters=None, k=1e-3, d=0.15):
     A /= divisors
     n = A.shape[1]
     v = np.random.rand(n, 1)
-    v *= (1 / nrm2(v))
+    v /= nrm2(v)
     u = None
     A_hat = A*(1-d) + (d/n)
     while u is None or np.sum(np.square(u-v)) >= k:
@@ -54,6 +68,19 @@ def recursive_ngrams(tokens, n=3):
         for k in range(1, n):
             ctx, tctx = it.tee(ctx)
             yield from ngrams(tctx, n=k)
+
+
+def coocs(tokens, n=5):
+    tokens, ttokens = it.tee(tokens)
+    T = set(ttokens)
+    v = len(T)
+    A = np.zeros((v, v))
+    T = {t: i for i, t in enumerate(T)}
+    for ctx in ngrams(tokens, n=n):
+        for t in ctx:
+            for w in ctx:
+                A[T[t], T[w]] += 1 / n
+    return (T, A)
 
 
 def pmi(tokens, n=5):
@@ -96,40 +123,40 @@ def tf_idf(tokens, n=32):
     return dict(zip(T, R))
 
 
-class MoodyEmbeddings(object):
+class Traker(object):
     def __init__(self, tokens, n=5, dim=None):
         tokens, ttokens = it.tee(tokens)
         self.tf_idf = tf_idf(ttokens)
         tokens, ttokens = it.tee(tokens)
         T, J = pmi(tokens, n=n)
-        U, S, V_h = np.linalg.svd(J, full_matrices=False)
-        dim = 64 if dim is None else dim
-        dim = min(dim, V_h.shape[0])
+        # U, S, V_h = np.linalg.svd(J, full_matrices=False)
+        # dim = 64 if dim is None else dim
+        # dim = min(dim, V_h.shape[0])
+        # V = V_h[:, :dim]
+        # A = J.dot(V)
+        # A = np.linalg.lstsq(A, V, rcond=None)[0]
+        # V = cp.array(V)
+        # R = coses(V, V)
+        # R = pr(R)
+        R = pr(J)
+        self.vocab = T
 
-        V = V_h[:, :dim]
-        A = J.dot(V)
-        A = np.linalg.lstsq(A, V, rcond=None)[0]
-
-        R = np.array([[cos(V[i], V[j]) for t, i in T.items()]
-                      for j in range(len(T))])
-        R = pr(R)
-
-        self.vocab = {t: V[i] for t, i in T.items()}
-        self.induction_matrix = A
-        self.dim = V.shape[1]
+        # self.vocab = {t: V[i] for t, i in T.items()}
+        # self.induction_matrix = A
+        # self.dim = V.shape[1]
         R /= nrm2(R)
         self.tr = {t: R[i] for t, i in T.items()}
 
-    def embed(self, token, placeholder=None):
-        if placeholder is None:
-            placeholder = np.zeros(self.dim)
-        return self.vocab[token] if token in self.vocab else placeholder
+    # def embed(self, token, placeholder=None):
+    #     if placeholder is None:
+    #         placeholder = np.zeros(self.dim)
+    #     return self.vocab[token] if token in self.vocab else placeholder
 
-    def oneshot(self, tokens):
-        M = np.array([self.embed(t) for t in tokens])
-        v = np.mean(M, axis=0)
-        v = v.reshape(v.shape[0])
-        return self.induction_matrix.dot(v)
+    # def oneshot(self, tokens):
+    #     M = np.array([self.embed(t) for t in tokens])
+    #     v = np.mean(M, axis=0)
+    #     v = v.reshape(v.shape[0])
+    #     return self.induction_matrix.dot(v)
 
     def stoprank(self, tokens):
         if isinstance(tokens, str):
@@ -142,12 +169,12 @@ class MoodyEmbeddings(object):
         m = np.mean(v)
         return m
 
-    def stops(self, alpha=0.99):
+    def stops(self, alpha=0.05):
         R = {t: self.stoprank(t) for t in self.vocab.keys()}
         parameters = stats.expon.fit([tuple(R.values())])
         alpha = stats.expon.ppf(alpha, *parameters)
         S = list(t for t, x in R.items() if alpha < x)
-        S.sort(key=lambda t: R[t], reverse=True)
+        S.sort(key=lambda t: R[t])
         return S
 
     def breakstops(self, tokens, alpha=0.99, n=3):
@@ -227,13 +254,14 @@ np.seterr(all='raise')
 tokens = tuple(tokenize(sys.stdin.read().lower()))
 # strip away conjunctions and determinants ― anything that isn't useful for
 # consideration as part of a key -word or -phrase
-forbidden_tags = {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'}
-tokens = tuple(t for t, tag in nltk.pos_tag(tokens)
-               if tag not in forbidden_tags)
-
-M = MoodyEmbeddings(tokens, n=5, dim=64)
-print(M.stops())
-print(M.keygrams(tokens, breakstops=False)[:10])
+# forbidden_tags = {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'}
+# tokens = tuple(t for t, tag in nltk.pos_tag(tokens)
+#                if tag not in forbidden_tags)
+stops = set(nltk.corpus.stopwords.words('english'))
+stops |= {'ur', 'u', 'r'}
+tokens = tuple(t for t in tokens if t not in stops)
+R = Traker(tokens, n=5, dim=64)
+print(R.keygrams(tokens, breakstops=False)[:10])
 
 # print(list(M.stoprank().keys()).index('textrank') / len(M.vocab))
 # print(M.vocab['the'])
