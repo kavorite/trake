@@ -49,13 +49,5 @@ determined and hard-coded for better performance with no losses in precision,
 and somewhat improved recall (e.g. trigrams of terms joined by `of`, `and`, or
 other conjunctions).
 
-For those wondering, `Trake` is named for the guy who wrote [this blog
-post][abstain], because I used his SVD pseudo-vector approach to generate
-on-the-fly word embeddings in conjunction with [the á-la-carte
-approach][alacarte]. The "TextRank" analysis I'm doing in `Trake.keygrams`
-isn't based on running GloVE or word2vec, but rather derived from his
-dimensionality-reduction methodology.
-
 [autosumm]: https://wikipedia.org/wiki/Automatic_summarization
 [alacarte]: https://www.offconvex.org/2018/09/18/alacarte/
-[abstain]: https://multithreaded.stitchfix.com/blog/2017/10/18/stop-using-word2vec/
