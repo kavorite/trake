@@ -84,7 +84,7 @@ def tf_idf(tokens, n=32):
         d += 1
         touch = set()
         for t in ctx:
-            tf[t] += 1/n
+            tf[t] += 1
             touch.add(t)
         for t in touch:
             df[t] += 1
