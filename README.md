@@ -5,12 +5,12 @@
 summarization][autosumm]. The reasons for its inception are twofold:
 
 1. I found approaches that captured summary keywords of a single lexical unit
-to be insufficient for my purposes, because many of what one would consider a
-"keyword" are not parsed by the most naive means of subdividing plain text into
-lexical units. For example, from [the aforementioned wiki
-page][autosumm], my methods extracted the following bigrams using a
-tag-filtered set of tokens `T` in the call `MoodyEmbeddings.keygrams(T,
-breakstops=False)`:
+   to be insufficient for my purposes, because many of what one would consider
+   a "keyword" are not parsed by the most naive means of subdividing plain text
+   into lexical units. For example, from [the aforementioned wiki
+   page][autosumm], my methods extracted the following bigrams using a
+   tag-filtered set of tokens `T` in the call `Trake.keygrams(T,
+   breakstops=False)`:
 
 ```
 #state-art #keyphrase-extraction #determinantal-point #bigram-trigram #et-al
@@ -26,13 +26,13 @@ metrics, which were derived from [this formulation][alacarte], as a result of
 having to permute many small phrases in order to generate my desired
 candidates.
 
-2. The likes of RAKE and TextRank rely on the small size of their
-respective candidate sets in order to yield results that speak to the content
-of their documents, but in exchange for their small candidate sets and the
-resulting precision, they trade away a bit of what I wanted, which was
-_con_-cision: Keywords that were longer than one lexical unit, but not by too
-much. Twitter leaps to mind, with camel-case hashtags that are multiple words
-long, but just barely. Not sentences, not even more than three words.
+2. The likes of RAKE and TextRank rely on the small size of their respective
+   candidate sets in order to yield results that speak to the content of their
+   documents, but in exchange for their small candidate sets and the resulting
+   precision, they trade away a bit of what I wanted, which was _con_-cision:
+   Keywords that were longer than one lexical unit, but not by too much.
+   Twitter leaps to mind, with camel-case hashtags that are multiple words
+   long, but just barely. Not sentences, not even more than three words.
 
 ## The solution
 
@@ -42,19 +42,19 @@ for each candidate phrase derived from the normalized TextRank and tf—idf of
 their constituent unigrams. This implementation is serial and rather slow, but
 still useful as a proof of concept and for reference purposes. Future
 refinements may include the development of an English-language stoplist, and
-additional heuristics are required for unsupervised use of
-`MoodyEmbeddings.stoprank` to generate a stoplist, but POS-filtering has proven
-effective enough for my intents and purposes that I surmise a static stoplist
-can be empirically determined and hard-coded for better performance with no
-losses in precision, and somewhat improved recall (e.g. trigrams of terms
-joined by `of`, `and`, or other conjunctions).
+additional heuristics are required for unsupervised use of `Trake.stoprank` to
+generate a stoplist, but POS-filtering has proven effective enough for my
+intents and purposes that I surmise a static stoplist can be empirically
+determined and hard-coded for better performance with no losses in precision,
+and somewhat improved recall (e.g. trigrams of terms joined by `of`, `and`, or
+other conjunctions).
 
-For those wondering, `MoodyEmbeddings` is named for the guy who wrote [this
-blog post][abstain], because I used his SVD pseudo-vector approach to generate
+For those wondering, `Trake` is named for the guy who wrote [this blog
+post][abstain], because I used his SVD pseudo-vector approach to generate
 on-the-fly word embeddings in conjunction with [the á-la-carte
-approach][alacarte]. The "TextRank" analysis I'm doing in
-`MoodyEmbeddings.keygrams` isn't based on running GloVE or word2vec, but rather
-derived from his dimensionality-reduction methodology.
+approach][alacarte]. The "TextRank" analysis I'm doing in `Trake.keygrams`
+isn't based on running GloVE or word2vec, but rather derived from his
+dimensionality-reduction methodology.
 
 [autosumm]: https://wikipedia.org/wiki/Automatic_summarization
 [alacarte]: https://www.offconvex.org/2018/09/18/alacarte/
