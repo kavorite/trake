@@ -74,7 +74,7 @@ func Tokenize(raw string, stops []string) (T Tokens) {
 	for _, t := range stops {
 		S[t] = struct{}{}
 	}
-	delim := regexp.MustCompile(`[\s\p{Mn}\p{P}]+`)
+	delim := regexp.MustCompile(`[\s\p{Mn}\p{P}0-9]+`)
 	T = delim.Split(raw, -1)
 	i := 0
 	for _, t := range T {
@@ -207,7 +207,7 @@ func TrakeFrom(D Doc, s, j int) Traker {
 		Doc: D,
 		TF:  tf,
 		IDF: D.IDF(s),
-		TR:  PR(A, 1e-6, 0.15).RawVector().Data,
+		TR:  PR(A, 1e-6, 0.3).RawVector().Data,
 	}
 	return R
 }
@@ -296,7 +296,7 @@ func main() {
 	T := Tokenize(strings.ToLower(string(buf)), stops)
 	D := DocFrom(T)
 	R := TrakeFrom(D, 32, 5)
-	K := R.Keygrams(3)
+	K := R.Keygrams(2)
 	K.Sort()
 	fmt.Println(K.Candidates[:10])
 }
