@@ -17,12 +17,13 @@ def pr(A, max_iters=None, k=1e-3, d=0.15):
     divisors = A.sum(axis=1, keepdims=True)
     divisors[divisors == 0] = 1
     i = 0
-    A /= divisors
-    n = A.shape[1]
+    A_hat = A / divisors
+    n = A_hat.shape[1]
     v = np.random.rand(n, 1)
     v /= np.linalg.norm(v, 2)
     u = None
-    A_hat = A*(1-d) + (d/n)
+    A_hat *= (1-d)
+    A_hat += d / n
     while u is None or np.sum(np.square(u-v)) >= k:
         u = v
         v = A_hat.dot(v)
@@ -121,16 +122,18 @@ class Traker(object):
         V.sort(key=lambda k: R[k])
         return V
 
-
-np.seterr(all='raise')
-tokens = tuple(tokenize(sys.stdin.read().lower()))
-# strip away conjunctions and determinants ― anything that isn't useful for
-# consideration as part of a key -word or -phrase
-# forbidden_tags = {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'}
-# tokens = tuple(t for t, tag in nltk.pos_tag(tokens)
-#                if tag not in forbidden_tags)
-stops = set(nltk.corpus.stopwords.words('english'))
-stops |= {'ur', 'u', 'r'}
-tokens = tuple(t for t in tokens if t not in stops)
-R = Traker(tokens, n=5, dim=64)
-print(R.keygrams(tokens)[:10])
+if __name__ == '__main__':
+    np.seterr(all='raise')
+    tokens = tuple(tokenize(sys.stdin.read().lower()))
+    # strip away conjunctions and determinants ― anything that isn't useful for
+    # consideration as part of a key -word or -phrase
+    # forbidden_tags = {'CC', 'DT', 'PRP', 'VBZ', 'IN', 'TO', 'VBP', 'MD'}
+    # tokens = tuple(t for t, tag in nltk.pos_tag(tokens)
+    #                if tag not in forbidden_tags)
+    # ...
+    # or just use a list
+    stops = set(nltk.corpus.stopwords.words('english'))
+    stops |= {'ur', 'u', 'r'}
+    tokens = tuple(t for t in tokens if t not in stops)
+    R = Traker(tokens, n=5, dim=64)
+    print(R.keygrams(tokens)[:10])
