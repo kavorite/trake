@@ -249,9 +249,7 @@ func (K *Keygrams) Swap(i, j int) {
 }
 
 func (K *Keygrams) Insert(S Tokens, x float64) {
-	i := sort.Search(K.Len(), func(i int) bool {
-		return K.Ranks[i] >= x
-	})
+	i := sort.SearchFloat64s(K.Ranks, x)
 	K.Candidates = append(K.Candidates, nil)
 	copy(K.Candidates[i+1:], K.Candidates[i:])
 	K.Candidates[i] = S
