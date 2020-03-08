@@ -49,14 +49,11 @@ func PR(A mat.Matrix, e, d float64) *mat.VecDense {
 		}
 	}
 	n := float64(k)
-	for i := 0; i < k; i++ {
-		for j := 0; j < k; j++ {
-			x := A_hat.At(i, j)
-			x *= (1 - d)
-			x += d / n
-			A_hat.Set(i, j, x)
-		}
-	}
+	A_hat.DoNonZero(func(i, j int, x float64) {
+		x *= (1 - d)
+		x += d / n
+		A_hat.Set(i, j, x)
+	})
 	v := mat.NewDense(k, 1, make([]float64, k))
 	v.Apply(func(i, j int, x float64) float64 {
 		return rand.Float64() / n
@@ -216,7 +213,7 @@ func TrakeFrom(D Doc, s, j int) Traker {
 		Doc: D,
 		TF:  tf,
 		IDF: D.IDF(s),
-		TR:  PR(A, 1e-6, 0.3).RawVector().Data,
+		TR:  PR(A, 1e-3, 0.3).RawVector().Data,
 	}
 	return R
 }
