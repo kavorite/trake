@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/james-bowman/sparse"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -23,7 +24,6 @@ func Cos(u, v mat.Vector) float64 {
 }
 
 func PR(A mat.Matrix, e, d float64) *mat.VecDense {
-	A_hat := mat.DenseCopyOf(A)
 	if d < 0 || d > 1 {
 		d = 0.15
 	}
@@ -34,20 +34,29 @@ func PR(A mat.Matrix, e, d float64) *mat.VecDense {
 	if rowc != k {
 		panic("dimension mismatch")
 	}
+	A_hat := sparse.NewCSR(k, k, make([]int, 0, k), make([]int, 0, k), make([]float64, 0, k))
+	A_hat.Clone(A)
 	for i := 0; i < k; i++ {
-		v := mat.NewDense(1, k, A_hat.RawRowView(i))
+		v := A_hat.RowView(i)
 		n := mat.Sum(v)
 		if n == 0 {
 			n = 1
 		} else {
 			n = 1 / n
 		}
-		v.Scale(n, v)
+		for j := 0; j < v.Len(); j++ {
+			A_hat.Set(i, j, v.AtVec(j)*n)
+		}
 	}
 	n := float64(k)
-	A_hat.Apply(func(i, j int, x float64) float64 {
-		return x*(1-d) + (d / n)
-	}, A_hat)
+	for i := 0; i < k; i++ {
+		for j := 0; j < k; j++ {
+			x := A_hat.At(i, j)
+			x *= (1 - d)
+			x += d / n
+			A_hat.Set(i, j, x)
+		}
+	}
 	v := mat.NewDense(k, 1, make([]float64, k))
 	v.Apply(func(i, j int, x float64) float64 {
 		return rand.Float64() / n
@@ -176,22 +185,25 @@ func (D Doc) IDF(s int) (idf []float64) {
 	return
 }
 
-func (D Doc) PMI(n int, tf []float64) (A *mat.Dense) {
+func (D Doc) PMI(n int, tf []float64) (A *sparse.DOK) {
 	v := D.V()
-	A = mat.NewDense(v, v, make([]float64, v*v))
+	A = sparse.NewDOK(v, v)
 	D.NGrams(n, func(S Tokens) {
-		j := 1 / float64(n)
+		x := 1 / float64(n)
 		for _, t := range S {
 			i := D.Vocab[t]
 			for _, w := range S {
-				k := D.Vocab[w]
-				A.Set(i, k, A.At(i, k)+j)
+				j := D.Vocab[w]
+				A.Set(i, j, A.At(i, j)+x)
 			}
 		}
 	})
-	A.Apply(func(i, j int, x float64) float64 {
-		return math.Log((x + 1) / tf[i] / tf[j])
-	}, A)
+	for i := 0; i < D.V(); i++ {
+		for j := 0; j < D.V(); j++ {
+			x := A.At(i, j)
+			A.Set(i, j, math.Log((x+1)/tf[i]/tf[j]))
+		}
+	}
 	return
 }
 
@@ -227,41 +239,56 @@ type Keygrams struct {
 	Ranks      []float64
 }
 
-func (K Keygrams) Len() int {
+func (K *Keygrams) Len() int {
 	return len(K.Candidates)
 }
 
-func (K Keygrams) Less(i, j int) bool {
+func (K *Keygrams) Less(i, j int) bool {
 	return K.Ranks[i] < K.Ranks[j]
 }
 
-func (K Keygrams) Swap(i, j int) {
+func (K *Keygrams) Swap(i, j int) {
 	u, v := K.Candidates, K.Ranks
 	u[i], u[j] = u[j], u[i]
 	v[i], v[j] = v[j], v[i]
 }
 
-func (R Traker) Keygrams(n int) (K Keygrams) {
-	F := make(map[string]float64, 1024)
-	K.Candidates = make([]Tokens, 0, 1024)
-	R.RecNGrams(n, func(S Tokens) {
-		k := S.String()
-		if _, ok := F[k]; ok {
-			F[k] += 1
-		} else {
-			K.Candidates = append(K.Candidates, S)
-			F[k] = 1
-		}
-	})
-	K.Ranks = make([]float64, len(K.Candidates))
-	for i, S := range K.Candidates {
-		K.Ranks[i] = R.Score(S) / math.Log(F[S.String()]+1) / float64(len(S)+1)
+func (K *Keygrams) Insert(c int, S Tokens, x float64) {
+	C, R := K.Candidates, K.Ranks
+	i := sort.SearchFloat64s(R, x)
+	if c > 0 && i < c {
+		K.Candidates = append(C[:i], append([]Tokens{S}, C[i:]...)...)
+		K.Ranks = append(R[:i], append([]float64{x}, R[i:]...)...)
 	}
-	return
+	if K.Len() > c {
+		K.Candidates = K.Candidates[:c]
+		K.Ranks = K.Ranks[:c]
+	}
 }
 
-func (K Keygrams) Sort() {
+func (K *Keygrams) Sort() {
 	sort.Sort(K)
+}
+
+func (R Traker) Keygrams(n, c int) (K *Keygrams) {
+	F := make(map[string]float64, c)
+	K = &Keygrams{
+		Candidates: make([]Tokens, 0, c),
+		Ranks:      make([]float64, 0, c),
+	}
+	R.RecNGrams(n, func(S Tokens) {
+		k := S.String()
+		_, ok := F[k]
+		if !ok {
+			F[k] = 0
+		}
+		F[k] += 1
+		if !ok {
+			x := R.Score(S) / math.Log(F[S.String()]) / float64(len(S)+1)
+			K.Insert(c, S, x)
+		}
+	})
+	return
 }
 
 func main() {
@@ -296,7 +323,6 @@ func main() {
 	T := Tokenize(strings.ToLower(string(buf)), stops)
 	D := DocFrom(T)
 	R := TrakeFrom(D, 32, 5)
-	K := R.Keygrams(2)
-	K.Sort()
+	K := R.Keygrams(2, 1024)
 	fmt.Println(K.Candidates[:10])
 }
