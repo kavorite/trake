@@ -198,12 +198,9 @@ func (D Doc) PMI(n int, tf []float64) (A *sparse.DOK) {
 			}
 		}
 	})
-	for i := 0; i < D.V(); i++ {
-		for j := 0; j < D.V(); j++ {
-			x := A.At(i, j)
-			A.Set(i, j, math.Log((x+1)/tf[i]/tf[j]))
-		}
-	}
+	A.DoNonZero(func(i, j int, x float64) {
+		A.Set(i, j, math.Log((x+1)/tf[i]/tf[j]))
+	})
 	return
 }
 
@@ -332,7 +329,7 @@ func main() {
 	}
 	T := Tokenize(strings.ToLower(string(buf)), stops)
 	D := DocFrom(T)
-	R := TrakeFrom(D, 32, 5)
+	R := TrakeFrom(D, 32, 3)
 	K := R.Keygrams(2, 10)
 	fmt.Println(K.Candidates)
 }
