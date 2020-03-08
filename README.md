@@ -9,8 +9,7 @@ summarization][autosumm]. The reasons for its inception are twofold:
    a "keyword" are not parsed by the most naive means of subdividing plain text
    into lexical units. For example, from [the aforementioned wiki
    page][autosumm], my methods extracted the following bigrams using a
-   tag-filtered set of tokens `T` in the call `Trake.keygrams(T,
-   breakstops=False)`:
+   tag-filtered set of tokens `T` in the call `Trake.keygrams(T)`:
 
 ```
 #state-art #keyphrase-extraction #determinantal-point #bigram-trigram #et-al
