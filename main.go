@@ -237,6 +237,7 @@ func (R Traker) Score(S Tokens) (x float64) {
 type Keygrams struct {
 	Candidates []Tokens
 	Ranks      []float64
+	Cap        int
 }
 
 func (K *Keygrams) Len() int {
@@ -253,17 +254,17 @@ func (K *Keygrams) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
-func (K *Keygrams) Insert(c int, S Tokens, x float64) {
-	C, R := K.Candidates, K.Ranks
-	i := sort.SearchFloat64s(R, x)
-	if c > 0 && i < c {
-		K.Candidates = append(C[:i], append([]Tokens{S}, C[i:]...)...)
-		K.Ranks = append(R[:i], append([]float64{x}, R[i:]...)...)
-	}
-	if K.Len() > c {
-		K.Candidates = K.Candidates[:c]
-		K.Ranks = K.Ranks[:c]
-	}
+func (K *Keygrams) Insert(S Tokens, x float64) {
+	i := sort.Search(K.Len(), func(i int) bool {
+		return K.Ranks[i] >= x
+	})
+	K.Candidates = append(K.Candidates, nil)
+	copy(K.Candidates[i+1:], K.Candidates[i:])
+	K.Candidates[i] = S
+
+	K.Ranks = append(K.Ranks, 0)
+	copy(K.Ranks[i+1:], K.Ranks[i:])
+	K.Ranks[i] = x
 }
 
 func (K *Keygrams) Sort() {
@@ -272,20 +273,29 @@ func (K *Keygrams) Sort() {
 
 func (R Traker) Keygrams(n, c int) (K *Keygrams) {
 	F := make(map[string]float64, c)
+	C := make(map[string]struct{}, c)
 	K = &Keygrams{
 		Candidates: make([]Tokens, 0, c),
 		Ranks:      make([]float64, 0, c),
+		Cap:        c,
 	}
 	R.RecNGrams(n, func(S Tokens) {
 		k := S.String()
-		_, ok := F[k]
-		if !ok {
+		if _, ok := F[k]; !ok {
 			F[k] = 0
 		}
 		F[k] += 1
-		if !ok {
-			x := R.Score(S) / math.Log(F[S.String()]) / float64(len(S)+1)
-			K.Insert(c, S, x)
+		if _, ok := C[k]; !ok {
+			C[k] = struct{}{}
+			x := R.Score(S) / math.Log(F[k]+1) / float64(len(S)+1)
+			K.Insert(S, x)
+		}
+		if len(K.Candidates) > c {
+			for _, D := range K.Candidates[c:] {
+				delete(C, D.String())
+			}
+			K.Candidates = K.Candidates[:c]
+			K.Ranks = K.Ranks[:c]
 		}
 	})
 	return
@@ -323,6 +333,6 @@ func main() {
 	T := Tokenize(strings.ToLower(string(buf)), stops)
 	D := DocFrom(T)
 	R := TrakeFrom(D, 32, 5)
-	K := R.Keygrams(2, 1024)
-	fmt.Println(K.Candidates[:10])
+	K := R.Keygrams(2, 10)
+	fmt.Println(K.Candidates)
 }
