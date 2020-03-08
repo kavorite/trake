@@ -259,7 +259,7 @@ type Traker struct {
 // length `s` and a context window size `j`.
 func TrakeFrom(D Doc, s, j int) Traker {
 	tf := D.TF()
-	A := D.PMI(2048, j, tf)
+	A := D.PMI(int(math.Round(math.Log2(float64(D.V()))))+1, j, tf)
 	R := Traker{
 		Doc: D,
 		TF:  tf,
@@ -382,7 +382,7 @@ func main() {
 	}
 	T := Tokenize(strings.ToLower(string(buf)), stops)
 	D := DocFrom(T)
-	R := TrakeFrom(D, 32, 3)
+	R := TrakeFrom(D, 32, 5)
 	K := R.Keygrams(2, 10)
 	fmt.Println(K.Candidates)
 }
