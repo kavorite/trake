@@ -19,10 +19,9 @@ func init() {
 	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
-func Cos(u, v mat.Vector) float64 {
-	return 1 - mat.Dot(u, v)/mat.Norm(u, 2)/mat.Norm(v, 2)
-}
-
+// `PR` stores a sparse clone of the matrix A, L1-normalizes its rows, and
+// calculates the PageRank of the elements, then returns the result as a dense
+// vector with the given quadratic error `e` and damping factor `d`.
 func PR(A mat.Matrix, e, d float64) *mat.VecDense {
 	if d < 0 || d > 1 {
 		d = 0.15
@@ -72,16 +71,19 @@ func PR(A mat.Matrix, e, d float64) *mat.VecDense {
 	return mat.VecDenseCopyOf(v.ColView(0))
 }
 
+// `Tokens` is a type alias for lexically manipulating a tokenized input.
 type Tokens []string
 
-func Tokenize(raw string, stops []string) (T Tokens) {
+// `Tokenize` tokenizes the given src and returns it as a string slice for
+// lexical manipulations, ignoring all tokens `t ∈ stops`.
+func Tokenize(src string, stops []string) (T Tokens) {
 	stops = append(stops, "")
 	S := make(map[string]struct{}, len(stops))
 	for _, t := range stops {
 		S[t] = struct{}{}
 	}
 	delim := regexp.MustCompile(`[\s\p{Mn}\p{P}0-9]+`)
-	T = delim.Split(raw, -1)
+	T = delim.Split(src, -1)
 	i := 0
 	for _, t := range T {
 		// t = delim.ReplaceAllString(t, "")
@@ -95,10 +97,14 @@ func Tokenize(raw string, stops []string) (T Tokens) {
 	return
 }
 
+// `String` gives a string representation of a series of tokens, as a
+// scheme-case hashtag.
 func (T Tokens) String() string {
 	return "#" + strings.Join([]string(T), "-")
 }
 
+// `Chunks` subdivides the document into n-grams, yielding each in turn. Unlike
+// Tokens.NGrams, the arguments passed to `f` never overlap.
 func (T Tokens) Chunks(n int, f func(Tokens)) {
 	i := 0
 	for i <= len(T)-n {
@@ -110,6 +116,9 @@ func (T Tokens) Chunks(n int, f func(Tokens)) {
 		i = k
 	}
 }
+
+// `NGrams` subdivides a document into successive 'windows' of overlapping tokens
+// and calls `f` on each sequence of lexical units in turn.
 func (T Tokens) NGrams(n int, f func(Tokens)) {
 	i := 0
 	for i <= len(T)-n {
@@ -118,6 +127,8 @@ func (T Tokens) NGrams(n int, f func(Tokens)) {
 	}
 }
 
+// `RecNGrams` calls `NGrams` recursively, such that all k-grams of the input
+// from 1 to n are passed to `f`.
 func (T Tokens) RecNGrams(n int, f func(Tokens)) {
 	T.NGrams(n, func(S Tokens) {
 		f(S)
@@ -127,6 +138,8 @@ func (T Tokens) RecNGrams(n int, f func(Tokens)) {
 	})
 }
 
+// `Vocab` returns a dictionary mapping each token to an index corresponding to
+// the order in which they appear.
 func (T Tokens) Vocab() (V map[string]int) {
 	V = make(map[string]int, 256)
 	for _, t := range T {
@@ -137,20 +150,26 @@ func (T Tokens) Vocab() (V map[string]int) {
 	return
 }
 
+// `Doc` is a `Tokens` sequence associated with a precomputed vocabulary
+// mapping `Vocab` (see `Tokens.Vocab`).
 type Doc struct {
 	Tokens
 	Vocab map[string]int
 }
 
+// `DocFrom` constructs a Doc from the given Tokens.
 func DocFrom(T Tokens) Doc {
 	V := T.Vocab()
 	return Doc{T, V}
 }
 
+// `V` returns the size of the Doc's Vocab.
 func (D Doc) V() int {
 	return len(D.Vocab)
 }
 
+// `TF` returns the L1-normalized term frequencies of each token that occurs in
+// D.
 func (D Doc) TF() (tf []float64) {
 	tf = make([]float64, D.V())
 	for _, t := range D.Tokens {
@@ -161,6 +180,10 @@ func (D Doc) TF() (tf []float64) {
 	return
 }
 
+// IDF returns the L1-normalized inverse document frequency of the terms in the
+// document such that idf[D.Vocab[t]] = log(|D| / |{d ∈ D; t ∈ d|) for the
+// tokenized contents of the document D as subdivided into a sequence of
+// s-grams, d.
 func (D Doc) IDF(s int) (idf []float64) {
 	d := 0
 	idf = make([]float64, D.V())
@@ -182,7 +205,13 @@ func (D Doc) IDF(s int) (idf []float64) {
 	return
 }
 
-func (D Doc) PMI(n int, tf []float64) (A *sparse.DOK) {
+// PMI returns an adjacency matrix of terms' cooccurrence frequencies,
+// downscaled by each terms' probability of occurring (term frequency), such
+// that `A[D.Vocab[t], D.Vocab[w]]` is the adjacency of tokens t and w. The
+// first argument controls the cutoff for nonzero sparse elements, the second
+// controls the size of context used to learn cooccurrences, and the last is
+// L1-normalized term frequencies (see `Tokens.TF`).
+func (D Doc) PMI(c, n int, tf []float64) (A *sparse.DOK) {
 	v := D.V()
 	A = sparse.NewDOK(v, v)
 	D.NGrams(n, func(S Tokens) {
@@ -195,20 +224,42 @@ func (D Doc) PMI(n int, tf []float64) (A *sparse.DOK) {
 			}
 		}
 	})
+	if c < 0 {
+		return
+	}
+	X := make([]float64, 0, A.NNZ())
 	A.DoNonZero(func(i, j int, x float64) {
-		A.Set(i, j, math.Log((x+1)/tf[i]/tf[j]))
+		x = math.Log((x + 1) / tf[i] / tf[j])
+		A.Set(i, j, x)
+		k := sort.SearchFloat64s(X, -x)
+		X = append(X[:k], append([]float64{x}, X[k:]...)...)
 	})
+	if c > len(X)-1 {
+		c = len(X) - 1
+	}
+	min := X[c]
+	J := sparse.NewDOK(v, v)
+	A.DoNonZero(func(i, j int, x float64) {
+		if x >= min {
+			J.Set(i, j, x)
+		}
+	})
+	A = J
 	return
 }
 
+// Traker is a `Doc` with a precomputed TF, IDF, and TextRank for each token
+// appearing in `Doc.Vocab`.
 type Traker struct {
 	Doc
 	TF, IDF, TR []float64
 }
 
+// `TrakeFrom` returns a new Traker from the given Doc, using an IDF n-gram
+// length `s` and a context window size `j`.
 func TrakeFrom(D Doc, s, j int) Traker {
 	tf := D.TF()
-	A := D.PMI(j, tf)
+	A := D.PMI(2048, j, tf)
 	R := Traker{
 		Doc: D,
 		TF:  tf,
@@ -218,6 +269,9 @@ func TrakeFrom(D Doc, s, j int) Traker {
 	return R
 }
 
+// `Score` returns an aggregate of `R`'s various metrics to rank the
+// significance of a given subsequence of `R.Tokens` to the overall subject
+// matter of the document.
 func (R Traker) Score(S Tokens) (x float64) {
 	for _, t := range S {
 		i := R.Vocab[t]
@@ -228,6 +282,8 @@ func (R Traker) Score(S Tokens) (x float64) {
 	return
 }
 
+// `Keygrams` is a series of candidate phrases and their corresponding ranks,
+// implementing `sort.Interface`.
 type Keygrams struct {
 	Candidates []Tokens
 	Ranks      []float64
@@ -263,6 +319,7 @@ func (K *Keygrams) Sort() {
 	sort.Sort(K)
 }
 
+// `Keygrams` catalogs and returns `Keygrams` using the given `Traker`.
 func (R Traker) Keygrams(n, c int) (K *Keygrams) {
 	F := make(map[string]float64, c)
 	C := make(map[string]struct{}, c)
@@ -298,6 +355,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// NLTK stoplist
 	stops := []string{
 		"i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you",
 		"you're", "you've", "you'll", "you'd", "your", "yours", "yourself",
