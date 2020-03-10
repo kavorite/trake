@@ -169,11 +169,13 @@ func (D Doc) V() int {
 // D.
 func (D Doc) TF() (tf []float64) {
     tf = make([]float64, D.V())
+    sigma := float64(0)
     for _, t := range D.Tokens {
         tf[D.Vocab[t]] += 1
+        sigma += 1
     }
     v := mat.NewVecDense(D.V(), tf)
-    v.ScaleVec(1/mat.Sum(v), v)
+    v.ScaleVec(1/sigma, v)
     return
 }
 
@@ -194,11 +196,14 @@ func (D Doc) IDF(s int) (idf []float64) {
             idf[D.Vocab[t]] += 1
         }
     })
+    sigma := float64(0)
     for i, x := range idf {
-        idf[i] = math.Log(float64(d) / x)
+        x = math.Log(float64(d) / x)
+        idf[i] = x
+        sigma += x
     }
     v := mat.NewVecDense(D.V(), idf)
-    v.ScaleVec(1/mat.Sum(v), v)
+    v.ScaleVec(1/sigma, v)
     return
 }
 
